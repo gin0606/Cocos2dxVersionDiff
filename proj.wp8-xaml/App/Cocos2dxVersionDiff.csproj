@@ -130,8 +130,8 @@
     <Content Include="SplashScreenImage.jpg" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\HelloCppComponent\HelloCppComponent.vcxproj">
-      <Name>HelloCppComponent</Name>
+    <ProjectReference Include="..\AppComponent\Cocos2dxVersionDiffComponent.vcxproj">
+      <Name>Cocos2dxVersionDiffComponent</Name>
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>

@@ -67,6 +67,7 @@ RenderTexture::RenderTexture()
 , _rtTextureRect(Rect::ZERO)
 , _fullRect(Rect::ZERO)
 , _fullviewPort(Rect::ZERO)
+, _saveFileCallback(nullptr)
 {
 #if CC_ENABLE_CACHE_TEXTURE_DATA
     // Listen this event to save render texture before come to background.
@@ -149,7 +150,7 @@ void RenderTexture::listenToForeground(EventCustom *event)
 
 RenderTexture * RenderTexture::create(int w, int h, Texture2D::PixelFormat eFormat)
 {
-    RenderTexture *ret = new RenderTexture();
+    RenderTexture *ret = new (std::nothrow) RenderTexture();
 
     if(ret && ret->initWithWidthAndHeight(w, h, eFormat))
     {
@@ -162,7 +163,7 @@ RenderTexture * RenderTexture::create(int w, int h, Texture2D::PixelFormat eForm
 
 RenderTexture * RenderTexture::create(int w ,int h, Texture2D::PixelFormat eFormat, GLuint uDepthStencilFormat)
 {
-    RenderTexture *ret = new RenderTexture();
+    RenderTexture *ret = new (std::nothrow) RenderTexture();
 
     if(ret && ret->initWithWidthAndHeight(w, h, eFormat, uDepthStencilFormat))
     {
@@ -175,7 +176,7 @@ RenderTexture * RenderTexture::create(int w ,int h, Texture2D::PixelFormat eForm
 
 RenderTexture * RenderTexture::create(int w, int h)
 {
-    RenderTexture *ret = new RenderTexture();
+    RenderTexture *ret = new (std::nothrow) RenderTexture();
 
     if(ret && ret->initWithWidthAndHeight(w, h, Texture2D::PixelFormat::RGBA8888, 0))
     {
@@ -230,7 +231,7 @@ bool RenderTexture::initWithWidthAndHeight(int w, int h, Texture2D::PixelFormat 
         memset(data, 0, dataLen);
         _pixelFormat = format;
 
-        _texture = new Texture2D();
+        _texture = new (std::nothrow) Texture2D();
         if (_texture)
         {
             _texture->initWithData(data, dataLen, (Texture2D::PixelFormat)_pixelFormat, powW, powH, Size((float)w, (float)h));
@@ -244,7 +245,7 @@ bool RenderTexture::initWithWidthAndHeight(int w, int h, Texture2D::PixelFormat 
         
         if (Configuration::getInstance()->checkForGLExtension("GL_QCOM"))
         {
-            _textureCopy = new Texture2D();
+            _textureCopy = new (std::nothrow) Texture2D();
             if (_textureCopy)
             {
                 _textureCopy->initWithData(data, dataLen, (Texture2D::PixelFormat)_pixelFormat, powW, powH, Size((float)w, (float)h));
@@ -393,7 +394,7 @@ void RenderTexture::visit(Renderer *renderer, const Mat4 &parentTransform, uint3
 {
     // override visit.
 	// Don't call visit on its children
-    if (!_visible)
+    if (!_visible || !isVisitableByVisitingCamera())
     {
         return;
     }
@@ -415,32 +416,35 @@ void RenderTexture::visit(Renderer *renderer, const Mat4 &parentTransform, uint3
     _orderOfArrival = 0;
 }
 
-bool RenderTexture::saveToFile(const std::string& filename, bool isRGBA)
+bool RenderTexture::saveToFile(const std::string& filename, bool isRGBA, std::function<void (RenderTexture*, const std::string&)> callback)
 {
     std::string basename(filename);
     std::transform(basename.begin(), basename.end(), basename.begin(), ::tolower);
     
     if (basename.find(".png") != std::string::npos)
     {
-        return saveToFile(filename, Image::Format::PNG, isRGBA);
+        return saveToFile(filename, Image::Format::PNG, isRGBA, callback);
     }
     else if (basename.find(".jpg") != std::string::npos)
     {
         if (isRGBA) CCLOG("RGBA is not supported for JPG format.");
-        return saveToFile(filename, Image::Format::JPG, false);
+        return saveToFile(filename, Image::Format::JPG, false, callback);
     }
     else
     {
         CCLOG("Only PNG and JPG format are supported now!");
     }
     
-    return saveToFile(filename, Image::Format::JPG, false);
+    return saveToFile(filename, Image::Format::JPG, false, callback);
 }
-bool RenderTexture::saveToFile(const std::string& fileName, Image::Format format, bool isRGBA)
+
+bool RenderTexture::saveToFile(const std::string& fileName, Image::Format format, bool isRGBA, std::function<void (RenderTexture*, const std::string&)> callback)
 {
     CCASSERT(format == Image::Format::JPG || format == Image::Format::PNG,
              "the image can only be saved as JPG or PNG format");
     if (isRGBA && format == Image::Format::JPG) CCLOG("RGBA is not supported for JPG format");
+    
+    _saveFileCallback = callback;
     
     std::string fullpath = FileUtils::getInstance()->getWritablePath() + fileName;
     _saveToFileCommand.init(_globalZOrder);
@@ -457,7 +461,10 @@ void RenderTexture::onSaveToFile(const std::string& filename, bool isRGBA)
     {
         image->saveToFile(filename.c_str(), !isRGBA);
     }
-
+    if(_saveFileCallback)
+    {
+        _saveFileCallback(this, filename);
+    }
     CC_SAFE_DELETE(image);
 }
 
@@ -481,13 +488,13 @@ Image* RenderTexture::newImage(bool fliimage)
 
     GLubyte *buffer = nullptr;
     GLubyte *tempData = nullptr;
-    Image *image = new Image();
+    Image *image = new (std::nothrow) Image();
 
     do
     {
-        CC_BREAK_IF(! (buffer = new GLubyte[savedBufferWidth * savedBufferHeight * 4]));
+        CC_BREAK_IF(! (buffer = new (std::nothrow) GLubyte[savedBufferWidth * savedBufferHeight * 4]));
 
-        if(! (tempData = new GLubyte[savedBufferWidth * savedBufferHeight * 4]))
+        if(! (tempData = new (std::nothrow) GLubyte[savedBufferWidth * savedBufferHeight * 4]))
         {
             delete[] buffer;
             buffer = nullptr;
@@ -555,7 +562,7 @@ void RenderTexture::onBegin()
 
 #if CC_TARGET_PLATFORM == CC_PLATFORM_WP8
         Mat4 modifiedProjection = director->getMatrix(MATRIX_STACK_TYPE::MATRIX_STACK_PROJECTION);
-        modifiedProjection = CCEGLView::sharedOpenGLView()->getReverseOrientationMatrix() * modifiedProjection;
+        modifiedProjection = GLViewImpl::sharedOpenGLView()->getReverseOrientationMatrix() * modifiedProjection;
         director->loadMatrix(MATRIX_STACK_TYPE::MATRIX_STACK_PROJECTION,modifiedProjection);
 #endif
 
@@ -574,7 +581,7 @@ void RenderTexture::onBegin()
     {
 #if CC_TARGET_PLATFORM == CC_PLATFORM_WP8
         Mat4 modifiedProjection = director->getMatrix(MATRIX_STACK_TYPE::MATRIX_STACK_PROJECTION);
-        modifiedProjection = CCEGLView::sharedOpenGLView()->getReverseOrientationMatrix() * modifiedProjection;
+        modifiedProjection = GLViewImpl::sharedOpenGLView()->getReverseOrientationMatrix() * modifiedProjection;
         director->loadMatrix(MATRIX_STACK_TYPE::MATRIX_STACK_PROJECTION, modifiedProjection);
 #endif
     }

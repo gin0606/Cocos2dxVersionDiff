@@ -48,16 +48,12 @@ THE SOFTWARE.
 
 #include "2d/CCParticleBatchNode.h"
 #include "renderer/CCTextureAtlas.h"
-#include "platform/CCFileUtils.h"
-#include "platform/CCImage.h"
-#include "base/ccTypes.h"
 #include "base/base64.h"
 #include "base/ZipUtils.h"
 #include "base/CCDirector.h"
-#include "base/CCProfiling.h"
 #include "renderer/CCTextureCache.h"
-
-#include "CCGL.h"
+#include "deprecated/CCString.h"
+#include "platform/CCFileUtils.h"
 
 using namespace std;
 
@@ -174,7 +170,7 @@ bool ParticleSystem::initWithFile(const std::string& plistFile)
 
     CCASSERT( !dict.empty(), "Particles: file not found");
     
-    // XXX compute path from a path, should define a function somewhere to do it
+    // FIXME: compute path from a path, should define a function somewhere to do it
     string listFilePath = plistFile;
     if (listFilePath.find('/') != string::npos)
     {
@@ -257,7 +253,7 @@ bool ParticleSystem::initWithDictionary(ValueMap& dictionary, const std::string&
             // position
             float x = dictionary["sourcePositionx"].asFloat();
             float y = dictionary["sourcePositiony"].asFloat();
-            this->setPosition( Vec2(x,y) );            
+            this->setPosition(x,y);            
             _posVar.x = dictionary["sourcePositionVariancex"].asFloat();
             _posVar.y = dictionary["sourcePositionVariancey"].asFloat();
 
@@ -465,7 +461,7 @@ bool ParticleSystem::initWithTotalParticles(int numberOfParticles)
     _emitterMode = Mode::GRAVITY;
 
     // default: modulate
-    // XXX: not used
+    // FIXME:: not used
     //    colorModulate = YES;
 
     _isAutoRemoveOnFinish = false;
@@ -698,6 +694,8 @@ void ParticleSystem::update(float dt)
     }
 
     {
+        Mat4 worldToNodeTM = getWorldToNodeTransform();
+        
         while (_particleIdx < _particleCount)
         {
             tParticle *p = &_particles[_particleIdx];
@@ -773,8 +771,11 @@ void ParticleSystem::update(float dt)
 
                 if (_positionType == PositionType::FREE)
                 {
-                    Vec2 diff = convertToNodeSpace(currentPosition) - convertToNodeSpace(p-> startPos);
-                    newPos = p->pos - diff;
+                    Vec3 p1(currentPosition.x,currentPosition.y,0),p2(p->startPos.x,p->startPos.y,0);
+                    worldToNodeTM.transformPoint(&p1);
+                    worldToNodeTM.transformPoint(&p2);
+                    p1 = p1 - p2;
+                    newPos = p->pos - Vec2(p1.x,p1.y);
                 }
                 else if(_positionType == PositionType::RELATIVE)
                 {

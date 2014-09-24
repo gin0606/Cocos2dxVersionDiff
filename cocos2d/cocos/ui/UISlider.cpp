@@ -336,7 +336,7 @@ void Slider::setPercent(int percent)
     _percent = percent;
     float res = percent / 100.0f;
     float dis = _barLength * res;
-    _slidBallRenderer->setPosition(Vec2(dis, _contentSize.height / 2.0f));
+    _slidBallRenderer->setPosition(dis, _contentSize.height / 2.0f);
     if (_scale9Enabled)
     {
         _progressBarRenderer->setPreferredSize(Size(dis,_progressBarTextureSize.height));
@@ -449,7 +449,7 @@ void Slider::adaptRenderers()
     }
 }
 
-const Size& Slider::getVirtualRendererSize() const
+Size Slider::getVirtualRendererSize() const
 {
     return _barRenderer->getContentSize();
 }

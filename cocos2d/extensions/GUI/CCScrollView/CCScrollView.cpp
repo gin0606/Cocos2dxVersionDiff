@@ -126,7 +126,7 @@ bool ScrollView::initWithViewSize(Size size, Node *container/* = nullptr*/)
         _clippingToBounds = true;
         //_container->setContentSize(Size::ZERO);
         _direction  = Direction::BOTH;
-        _container->setPosition(Vec2(0.0f, 0.0f));
+        _container->setPosition(0.0f, 0.0f);
         _touchLength = 0.0f;
         
         this->addChild(_container);
@@ -341,6 +341,19 @@ void ScrollView::setContainer(Node * pContainer)
     this->addChild(this->_container);
 
     this->setViewSize(this->_viewSize);
+}
+
+bool ScrollView::hasVisibleParents() const
+{
+    auto parent = this->getParent();
+    for( auto c = parent; c != nullptr; c = c->getParent() )
+    {
+        if( !c->isVisible() )
+        {
+            return false;
+        }
+    }
+    return true;
 }
 
 void ScrollView::relocateContainer(bool animated)
@@ -625,7 +638,7 @@ void ScrollView::visit(Renderer *renderer, const Mat4 &parentTransform, uint32_t
 
 bool ScrollView::onTouchBegan(Touch* touch, Event* event)
 {
-    if (!this->isVisible())
+    if (!this->isVisible() || !this->hasVisibleParents())
     {
         return false;
     }
